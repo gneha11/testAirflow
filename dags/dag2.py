@@ -10,7 +10,7 @@ default_args = {
 }
 
 def test_imports():
-    from airflow_operators import shared_utils
+    from shared_utils import df_get_logger
     print("shared_utils imported successfully")
 
 with DAG(
@@ -25,4 +25,5 @@ with DAG(
         task_id="test_imports",
         python_callable=test_imports,
     )
+
 
