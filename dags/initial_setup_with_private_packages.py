@@ -113,6 +113,22 @@ with DAG(
         ),
     )
 
+    # Debug: check installed packages
+    list_installed_packages = BashOperator(
+        task_id="list_installed_packages",
+        bash_command="pip show data-foundation || pip list | grep foundation"
+    )
+
+    # Debug: check sys.path and modules
+    check_python_path = BashOperator(
+        task_id="check_python_path",
+        bash_command=(
+            "python -c 'import sys, pkgutil; "
+            "print(\"\\n[PYTHON PATH]\", sys.path, \"\\n\"); "
+            "print(\"[FOUND MODULES]\", [m.name for m in pkgutil.iter_modules() if \"foundation\" in m.name])'"
+        )
+    )
+
     # Run setup logic
     initial_setup_task = PythonOperator(
         task_id="initial_setup_task",
@@ -121,4 +137,4 @@ with DAG(
     )
 
     # Task dependencies
-    install_shared_utils >> install_data_foundation >> initial_setup_task
+    install_shared_utils >> install_data_foundation >> list_installed_packages >> check_python_path >> initial_setup_task
