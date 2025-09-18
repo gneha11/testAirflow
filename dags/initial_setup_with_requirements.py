@@ -1,6 +1,7 @@
 # ============================================================
-# DAG: initial_setup_with_requirements.py
-# Description: Installs packages from requirements.txt, sets Java, and runs initial setup
+# DAG: initial_setup_with_private_packages_fabric_safe.py
+# Description: Installs private packages from requirements.txt,
+#              runs initial setup, logs to Airflow live.
 # ============================================================
 
 from airflow import DAG
@@ -8,7 +9,8 @@ from airflow.operators.python import PythonOperator
 from datetime import datetime
 import subprocess
 import sys
-import os
+import logging
+from pathlib import Path
 
 # ---------------------------
 # Default Arguments
@@ -25,46 +27,48 @@ default_args = {
 # PYTHON TASK: INITIAL SETUP
 # ---------------------------
 def run_initial_setup(**context):
-    import logging
+    """
+    1️⃣ Install private packages from requirements.txt
+    2️⃣ Import private packages after installation
+    3️⃣ Run your setup logic with live logging in Airflow
+    """
+    # ---------------------------
+    # Install packages from requirements.txt
+    # ---------------------------
+    req_file = "/opt/airflow/git/testAirflow.git/dags/requirements.txt"
+    if Path(req_file).exists():
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "--no-cache-dir", "-r", req_file])
+    else:
+        logging.warning(f"Requirements file not found: {req_file}")
 
     # ---------------------------
-    # 1️⃣ Set Java Environment for PySpark
+    # Import private packages after installation
     # ---------------------------
-    os.environ["JAVA_HOME"] = "/usr/lib/jvm/java-17-openjdk-amd64"
-    os.environ["PATH"] = os.environ["JAVA_HOME"] + "/bin:" + os.environ["PATH"]
+    try:
+        from data_foundation import create_schemas, create_base_folders
+        from shared_utils import (
+            df_get_logger,
+            df_create_log_session_id,
+            df_save_log_to_lakehouse,
+            df_get_postgres_connection,
+            df_load_config,
+        )
+    except ModuleNotFoundError as e:
+        logging.error(f"Private package import failed: {e}")
+        raise
 
     # ---------------------------
-    # 2️⃣ Install packages from requirements.txt
+    # Get DAG parameters
     # ---------------------------
-    requirements_path = "/opt/airflow/git/testAirflow.git/dags/requirements.txt"
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "--no-cache-dir", "-r", requirements_path])
-
-    # ---------------------------
-    # 3️⃣ Imports after installation
-    # ---------------------------
-    from pyspark.sql import SparkSession
-    from data_foundation import create_schemas, create_base_folders
-    from shared_utils import (
-        df_get_logger,
-        df_create_log_session_id,
-        df_save_log_to_lakehouse,
-        df_get_postgres_connection,
-        df_load_config,
-    )
-
-    # Get parameters from DAG run
     params = context["params"]
     tenant_id = params.get("tenant_id", "fea7d713-34c8-451d-9fed-b0a10080c601")
     enterprise_id = params.get("enterprise_id", "initial_setup")
 
-    # Log session
-    log_session_id = df_create_log_session_id()
-
-    # Start Spark session
-    spark = SparkSession.builder.appName("data_foundation").getOrCreate()
-
+    # ---------------------------
     # Logger instance
-    logger_instance = df_get_logger(
+    # ---------------------------
+    log_session_id = df_create_log_session_id()
+    logger = df_get_logger(
         name=enterprise_id,
         level=logging.INFO,
         log_to_file=True,
@@ -73,46 +77,37 @@ def run_initial_setup(**context):
         log_session_id=log_session_id,
     )
 
-    # Create schemas
+    # ---------------------------
+    # Run setup logic (without creating SparkSession manually)
+    # ---------------------------
     try:
-        create_schemas(
-            spark,
-            ["telemetry_bronze", "telemetry_silver", "telemetry_gold", "asset_master"],
-            logger_instance,
-        )
+        create_schemas(None, ["telemetry_bronze", "telemetry_silver", "telemetry_gold", "asset_master"], logger)
+        create_base_folders(None, ["env", "logs"], logger)
     except Exception as e:
-        logger_instance.error(f"❌ Failed to create schemas: {e}")
-        df_save_log_to_lakehouse(logger_instance)
+        logger.error(f"❌ Setup failed: {e}")
+        df_save_log_to_lakehouse(logger)
         raise
-    else:
-        try:
-            create_base_folders(spark, ["env", "logs"], logger_instance)
-        except Exception as e:
-            logger_instance.error(f"❌ Failed to create base folders: {e}")
-            df_save_log_to_lakehouse(logger_instance)
-            raise
-        finally:
-            df_save_log_to_lakehouse(logger_instance)
-            print("✅ Log file saved to Lakehouse")
+    finally:
+        df_save_log_to_lakehouse(logger)
+        print("✅ Log file saved to Lakehouse")
 
 
 # ---------------------------
 # DAG DEFINITION
 # ---------------------------
 with DAG(
-    dag_id="initial_setup_with_requirements",
+    dag_id="initial_setup_with_private_packages_fabric_safe",
     default_args=default_args,
-    description="Install packages from requirements.txt, set Java, and run Fabric initial setup",
+    description="Install private packages from requirements.txt and run initial setup with live Airflow logs",
     schedule_interval=None,
     start_date=datetime(2025, 1, 1),
     catchup=False,
-    params={
+    params={  # Default values (override via `--conf`)
         "tenant_id": "fea7d713-34c8-451d-9fed-b0a10080c601",
         "enterprise_id": "initial_setup",
     },
 ) as dag:
 
-    # Run setup logic (installs packages from requirements.txt + Java fix)
     initial_setup_task = PythonOperator(
         task_id="initial_setup_task",
         python_callable=run_initial_setup,
