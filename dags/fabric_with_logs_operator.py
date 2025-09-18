@@ -7,13 +7,29 @@ import asyncio
 import aiohttp
 
 class MSFabricRunItemWithLiveLogsOperator(MSFabricRunItemOperator):
-    def __init__(self, *, fabric_conn_id: str, workspace_id: str, item_id: str, poll_interval: int = 10, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(
+        self,
+        *,
+        fabric_conn_id: str,
+        workspace_id: str,
+        item_id: str,
+        job_type: str = "RunNotebook",
+        poll_interval: int = 10,
+        **kwargs,
+    ):
+        # Save custom args first
         self.fabric_conn_id = fabric_conn_id
         self.workspace_id = workspace_id
         self.item_id = item_id
+        self.job_type = job_type
         self.poll_interval = poll_interval
-        self.hook = None  # will initialize in execute
+        self.hook = None
+
+        # Only pass what the parent operator expects to super().__init__
+        # MSFabricRunItemOperator usually expects: task_id, dag, deferrable, wait_for_termination, etc.
+        # Do NOT pass your custom args to super().__init__
+        super().__init__(**kwargs)
+
 
     def execute(self, context: Context):
         from airflow.providers.microsoft.fabric.hooks.run_item import MSFabricRunItemHook  # import inside execute
