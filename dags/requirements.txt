@@ -1,1 +1,3 @@
 /opt/airflow/git/testAirflow.git/plugins/shared_utils-1.0.1-py3-none-any.whl
+/opt/airflow/git/testAirflow.git/plugins/data_foundation-1.0.0-py3-none-any.whl
+pyspark==4.0.1
