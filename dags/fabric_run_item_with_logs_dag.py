@@ -12,9 +12,10 @@ with DAG(
 
     run_with_logs = MSFabricRunItemWithLiveLogsOperator(
         task_id="run_schema_and_folder_setup",
-        fabric_conn_id="fabric-integration",  # pass conn_id, operator will init hook
+        fabric_conn_id="fabric-integration",
         workspace_id="bd883325-52e5-44d1-8742-72b4e6b3be82",
         item_id="18023b08-26a5-44b5-9b8a-8cde87a2280f",
+        job_type="RunNotebook",
+        deferrable=True,        # live log streaming
         poll_interval=10,
-        deferrable=True,  # allow async trigger for live logs
     )
