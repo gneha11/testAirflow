@@ -1,6 +1,6 @@
 # ============================================================
 # DAG: initial_setup_with_requirements.py
-# Description: Installs packages from requirements.txt and runs initial setup
+# Description: Installs packages from requirements.txt, sets Java, and runs initial setup
 # ============================================================
 
 from airflow import DAG
@@ -8,7 +8,7 @@ from airflow.operators.python import PythonOperator
 from datetime import datetime
 import subprocess
 import sys
-from pathlib import Path
+import os
 
 # ---------------------------
 # Default Arguments
@@ -28,16 +28,19 @@ def run_initial_setup(**context):
     import logging
 
     # ---------------------------
-    # Install packages from requirements.txt
+    # 1️⃣ Set Java Environment for PySpark
     # ---------------------------
-    requirements_file = Path("/opt/airflow/git/testAirflow.git/dags/requirements.txt")
-    if requirements_file.exists():
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "--no-cache-dir", "-r", str(requirements_file)])
-    else:
-        raise FileNotFoundError(f"{requirements_file} not found")
+    os.environ["JAVA_HOME"] = "/usr/lib/jvm/java-17-openjdk-amd64"
+    os.environ["PATH"] = os.environ["JAVA_HOME"] + "/bin:" + os.environ["PATH"]
 
     # ---------------------------
-    # Imports after installation
+    # 2️⃣ Install packages from requirements.txt
+    # ---------------------------
+    requirements_path = "/opt/airflow/git/testAirflow.git/dags/requirements.txt"
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "--no-cache-dir", "-r", requirements_path])
+
+    # ---------------------------
+    # 3️⃣ Imports after installation
     # ---------------------------
     from pyspark.sql import SparkSession
     from data_foundation import create_schemas, create_base_folders
@@ -92,22 +95,24 @@ def run_initial_setup(**context):
             df_save_log_to_lakehouse(logger_instance)
             print("✅ Log file saved to Lakehouse")
 
+
 # ---------------------------
 # DAG DEFINITION
 # ---------------------------
 with DAG(
     dag_id="initial_setup_with_requirements",
     default_args=default_args,
-    description="Install packages from requirements.txt and run initial Fabric setup",
+    description="Install packages from requirements.txt, set Java, and run Fabric initial setup",
     schedule_interval=None,
     start_date=datetime(2025, 1, 1),
     catchup=False,
-    params={  # Default values (override via `--conf`)
+    params={
         "tenant_id": "fea7d713-34c8-451d-9fed-b0a10080c601",
         "enterprise_id": "initial_setup",
     },
 ) as dag:
 
+    # Run setup logic (installs packages from requirements.txt + Java fix)
     initial_setup_task = PythonOperator(
         task_id="initial_setup_task",
         python_callable=run_initial_setup,
