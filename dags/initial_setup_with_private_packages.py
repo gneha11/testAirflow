@@ -100,7 +100,7 @@ with DAG(
     install_shared_utils = BashOperator(
         task_id="install_shared_utils",
         bash_command=(
-            "pip install --force-reinstall  "
+            "pip install --no-cache-dir  "
             "/opt/airflow/git/testAirflow.git/plugins/shared_utils-1.0.1-py3-none-any.whl"
         ),
     )
@@ -108,7 +108,7 @@ with DAG(
     install_data_foundation = BashOperator(
         task_id="install_data_foundation",
         bash_command=(
-            "pip install --force-reinstall  "
+            "pip install ---no-cache-dir  "
             "/opt/airflow/git/testAirflow.git/plugins/data_foundation-1.0.0-py3-none-any.whl"
         ),
     )
