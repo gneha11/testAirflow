@@ -1,6 +1,6 @@
 # ============================================================
 # DAG: initial_setup_with_private_packages.py
-# Description: Installs private packages and runs initial setup
+# Description: Installs private packages, PySpark, and runs initial setup
 # ============================================================
 
 from airflow import DAG
@@ -85,7 +85,7 @@ def run_initial_setup(**context):
 with DAG(
     dag_id="initial_setup_with_private_packages",
     default_args=default_args,
-    description="Install private packages and run initial Fabric setup",
+    description="Install private packages, PySpark, and run initial Fabric setup",
     schedule_interval=None,
     start_date=datetime(2025, 1, 1),
     catchup=False,
@@ -112,6 +112,12 @@ with DAG(
         ),
     )
 
+    # Install PySpark
+    install_pyspark = BashOperator(
+        task_id="install_pyspark",
+        bash_command="pip install --no-cache-dir pyspark==4.0.1"
+    )
+
     # Debug: check sys.path and modules
     check_python_path = BashOperator(
         task_id="check_python_path",
@@ -130,4 +136,4 @@ with DAG(
     )
 
     # Task dependencies
-    install_shared_utils >> install_data_foundation >>  check_python_path >> initial_setup_task
+    install_shared_utils >> install_data_foundation >> install_pyspark >> check_python_path >> initial_setup_task
