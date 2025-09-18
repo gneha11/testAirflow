@@ -17,4 +17,5 @@ with DAG(
         job_type="RunNotebook",
         wait_for_termination=True,
         deferrable=True,
+        poll_interval=10,
     )
