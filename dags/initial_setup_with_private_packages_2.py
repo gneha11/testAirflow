@@ -1,6 +1,6 @@
 # ============================================================
-# DAG: initial_setup_with_private_packages.py
-# Description: Installs private packages, PySpark, and runs initial setup
+# DAG: initial_setup_with_requirements.py
+# Description: Installs packages from requirements.txt and runs initial setup
 # ============================================================
 
 from airflow import DAG
@@ -8,6 +8,7 @@ from airflow.operators.python import PythonOperator
 from datetime import datetime
 import subprocess
 import sys
+from pathlib import Path
 
 # ---------------------------
 # Default Arguments
@@ -20,25 +21,20 @@ default_args = {
     "retries": 0,
 }
 
-
 # ---------------------------
 # PYTHON TASK: INITIAL SETUP
 # ---------------------------
 def run_initial_setup(**context):
     import logging
-    import subprocess
 
     # ---------------------------
-    # Install required packages at runtime
+    # Install packages from requirements.txt
     # ---------------------------
-    packages_to_install = [
-        "/opt/airflow/git/testAirflow.git/plugins/shared_utils-1.0.1-py3-none-any.whl",
-        "/opt/airflow/git/testAirflow.git/plugins/data_foundation-1.0.0-py3-none-any.whl",
-        "pyspark==4.0.1",
-    ]
-
-    for pkg in packages_to_install:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "--no-cache-dir", pkg])
+    requirements_file = Path("/opt/airflow/git/testAirflow.git/dags/requirements.txt")
+    if requirements_file.exists():
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "--no-cache-dir", "-r", str(requirements_file)])
+    else:
+        raise FileNotFoundError(f"{requirements_file} not found")
 
     # ---------------------------
     # Imports after installation
@@ -96,14 +92,13 @@ def run_initial_setup(**context):
             df_save_log_to_lakehouse(logger_instance)
             print("✅ Log file saved to Lakehouse")
 
-
 # ---------------------------
 # DAG DEFINITION
 # ---------------------------
 with DAG(
-    dag_id="initial_setup_with_private_packages_2",
+    dag_id="initial_setup_with_requirements",
     default_args=default_args,
-    description="Install private packages, PySpark, and run initial Fabric setup",
+    description="Install packages from requirements.txt and run initial Fabric setup",
     schedule_interval=None,
     start_date=datetime(2025, 1, 1),
     catchup=False,
@@ -113,7 +108,6 @@ with DAG(
     },
 ) as dag:
 
-    # Run setup logic (with inline package installation)
     initial_setup_task = PythonOperator(
         task_id="initial_setup_task",
         python_callable=run_initial_setup,
