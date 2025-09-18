@@ -41,9 +41,6 @@ def run_initial_setup(**context):
     tenant_id = params.get("tenant_id", "fea7d713-34c8-451d-9fed-b0a10080c601")
     enterprise_id = params.get("enterprise_id", "initial_setup")
 
-    # Spark Session
-    spark = SparkSession.builder.appName(enterprise_id).getOrCreate()
-
     # Log session
     log_session_id = df_create_log_session_id()
 
