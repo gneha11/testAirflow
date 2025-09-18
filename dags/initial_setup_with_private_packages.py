@@ -108,7 +108,7 @@ with DAG(
     install_data_foundation = BashOperator(
         task_id="install_data_foundation",
         bash_command=(
-            "pip install ---no-cache-dir  "
+            "pip install --no-cache-dir  "
             "/opt/airflow/git/testAirflow.git/plugins/data_foundation-1.0.0-py3-none-any.whl"
         ),
     )
