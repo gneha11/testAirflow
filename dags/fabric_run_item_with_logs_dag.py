@@ -1,6 +1,6 @@
 from airflow import DAG
 from datetime import datetime
-from operators.fabric_with_logs_operator import MSFabricRunItemWithLogsOperator
+from fabric_with_logs_operator import MSFabricRunItemWithLogsOperator
 
 with DAG(
     dag_id="fabric_run_item_with_logs_dag",
