@@ -16,5 +16,5 @@ with DAG(
         item_id="18023b08-26a5-44b5-9b8a-8cde87a2280f",
         job_type="RunNotebook",
         wait_for_termination=True,
-        deferrable=False,
+        deferrable=True,
     )
