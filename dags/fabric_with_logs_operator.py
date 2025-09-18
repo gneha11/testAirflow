@@ -88,6 +88,7 @@ class MSFabricRunLogsTrigger(BaseTrigger):
 
 
 # ------------------------- OPERATOR -------------------------
+# ------------------------- OPERATOR -------------------------
 class MSFabricRunItemWithLiveLogsOperator(MSFabricRunItemOperator):
     """
     Operator to run a Fabric notebook and stream live logs in Airflow UI.
@@ -137,16 +138,25 @@ class MSFabricRunItemWithLiveLogsOperator(MSFabricRunItemOperator):
         )
 
     def execute_complete(self, context: Context, event: dict[str, Any] = None):
+        """
+        Called every time the trigger yields a TriggerEvent.
+        - If it's a log event → stream it and keep waiting.
+        - If it's a status event → finish the task.
+        """
         if not event:
             raise AirflowException("No event received from Fabric trigger")
 
+        # Stream logs continuously
         if "log" in event:
             self.log.info(event["log"])
+            return None  # keep waiting for more events
 
+        # Final status
         if "status" in event:
             status = event["status"]
             if status == "Completed":
                 self.log.info("✅ Fabric job completed successfully!")
+                return status
             else:
                 raise AirflowException(f"❌ Fabric job ended with status: {status}")
 
