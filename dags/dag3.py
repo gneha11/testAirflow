@@ -27,7 +27,7 @@ with DAG(
         task_id="install_shared_utils",
         bash_command=(
             "pip install --force-reinstall "
-            "/opt/airflow/git/testAirflow/plugins/shared_utils-1.0.1-py3-none-any.whl"
+            "/opt/airflow/git/testAirflow.git/plugins/shared_utils-1.0.1-py3-none-any.whl"
         ),
     )
 
