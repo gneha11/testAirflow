@@ -101,7 +101,7 @@ with DAG(
         task_id="install_shared_utils",
         bash_command=(
             "pip install --force-reinstall "
-            "/opt/airflow/git/f84f640ef55a496ebc22e569b1d4593046b368b2/plugins/shared_utils-1.0.1-py3-none-any.whl"
+            "/opt/airflow/git/testAirflow.git/plugins/shared_utils-1.0.1-py3-none-any.whl"
         ),
     )
 
@@ -109,7 +109,7 @@ with DAG(
         task_id="install_data_foundation",
         bash_command=(
             "pip install --force-reinstall "
-            "/opt/airflow/git/f84f640ef55a496ebc22e569b1d4593046b368b2/plugins/data_foundation-1.0.1-py3-none-any.whl"
+            "/opt/airflow/git/testAirflow.git/plugins/data_foundation-1.0.0-py3-none-any.whl"
         ),
     )
 
