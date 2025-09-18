@@ -14,13 +14,26 @@ class MSFabricRunLogsTrigger(BaseTrigger):
     """
     Async trigger that polls Fabric notebook run and streams logs.
     """
-    def __init__(self, hook, workspace_id: str, item_id: str, run_id: str, poll_interval: int = 10):
-        super().__init__()
-        self.hook = hook
-        self.workspace_id = workspace_id
-        self.item_id = item_id
-        self.run_id = run_id
+    def __init__(
+        self,
+        *,
+        fabric_conn_id: str,
+        workspace_id: str,
+        item_id: str,
+        job_type: str = "RunNotebook",
+        poll_interval: int = 10,
+        **kwargs,
+    ):
         self.poll_interval = poll_interval
+        super().__init__(
+            fabric_conn_id=fabric_conn_id,
+            workspace_id=workspace_id,
+            item_id=item_id,
+            job_type=job_type,
+            **kwargs
+        )
+        self.hook = None
+
 
     def serialize(self):
         return (
