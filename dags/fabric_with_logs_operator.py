@@ -1,29 +1,58 @@
 from airflow.providers.microsoft.fabric.operators.run_item import MSFabricRunItemOperator
 from airflow.utils.context import Context
 from airflow.exceptions import AirflowException
+import time
+import requests
 
-class MSFabricRunItemWithLogsOperator(MSFabricRunItemOperator):
-
+class MSFabricRunItemWithLiveLogsOperator(MSFabricRunItemOperator):
     def execute(self, context: Context):
-        # Submit job & wait for termination
+        # Submit the job
         job_instance = super().execute(context)
-        self.log.info(f"Fabric job submitted. Job instance: {job_instance}")
+        self.log.info(f"✅ Fabric job submitted. Job instance: {job_instance}")
 
-        # Use hook method to fetch logs
         try:
-            logs = self.hook.get_job_logs(
-                workspace_id=self.workspace_id,
-                item_id=self.item_id,
-                job_instance_id=job_instance["id"]
+            job_instance_id = job_instance["id"]
+        except Exception:
+            raise AirflowException("Could not extract job_instance_id from Fabric response")
+
+        headers = self.hook.get_auth_headers()
+        last_line_index = 0
+        poll_interval = 10  # seconds
+        max_retries = 360  # ~1 hour
+
+        for _ in range(max_retries):
+            # Step 1: Check job status
+            run_url = (
+                f"{self.hook.fabric_base_url}/v1/workspaces/{self.workspace_id}/"
+                f"items/{self.item_id}/jobs/instances/{job_instance_id}"
             )
-            if logs:
-                self.log.info("===== Fabric Notebook Logs =====")
-                for line in logs:
-                    self.log.info(line)
-                self.log.info("===== End Fabric Notebook Logs =====")
-            else:
-                self.log.warning("No logs returned from Fabric API")
-        except Exception as e:
-            self.log.error(f"Failed to fetch Fabric notebook logs: {e}")
+            resp = requests.get(run_url, headers=headers)
+            resp.raise_for_status()
+            run_info = resp.json()
+            status = run_info.get("status")
+
+            # Step 2: Fetch logs incrementally
+            log_url = (
+                f"{self.hook.fabric_base_url}/v1/workspaces/{self.workspace_id}/"
+                f"items/{self.item_id}/jobs/{job_instance_id}/getLog"
+            )
+            log_resp = requests.get(log_url, headers=headers)
+            log_resp.raise_for_status()
+            logs = log_resp.json().get("value", [])
+
+            # Print only new lines
+            for line in logs[last_line_index:]:
+                self.log.info(line)
+            last_line_index = len(logs)
+
+            if status in ("Completed", "Failed", "Cancelled"):
+                break
+
+            time.sleep(poll_interval)
+
+        self.log.info(f"📌 Final Fabric job status: {status}")
+
+        if status != "Completed":
+            raise AirflowException(f"Fabric job did not complete successfully (status={status})")
 
         return job_instance
