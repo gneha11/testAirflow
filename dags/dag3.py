@@ -15,7 +15,7 @@ def test_imports():
     print("✅ shared_utils imported successfully")
 
 with DAG(
-    dag_id="test_df_imports_dag_2",
+    dag_id="pip_install_dag",
     default_args=default_args,
     description="Install wheel and test shared_utils import",
     schedule_interval=None,
