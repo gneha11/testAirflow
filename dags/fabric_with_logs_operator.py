@@ -1,117 +1,74 @@
-import asyncio
+# fabric_live_logs_operator.py
 from airflow.providers.microsoft.fabric.operators.run_item import MSFabricRunItemOperator
-from airflow.exceptions import AirflowException
-from airflow.models.baseoperator import BaseOperator
-from airflow.utils.context import Context
-from airflow.utils.decorators import apply_defaults
 from airflow.triggers.base import BaseTrigger, TriggerEvent
-from airflow.providers.microsoft.fabric.hooks.run_item import MSFabricRunJobHook
+from airflow.models import BaseOperator
+from airflow.utils.context import Context
+from airflow.exceptions import AirflowException
+import asyncio
+import aiohttp
+import datetime
 
-# ------------------ Trigger ------------------
-class FabricJobLogsTrigger(BaseTrigger):
-    """
-    Airflow trigger to poll Fabric notebook status and fetch logs asynchronously.
-    """
-    def __init__(self, workspace_id: str, item_id: str, run_id: str, poll_interval: int = 10):
-        super().__init__()
+# --------------------- Trigger ---------------------
+class MSFabricNotebookTrigger(BaseTrigger):
+    def __init__(self, hook, workspace_id, item_id, poll_interval=10):
+        self.hook = hook
         self.workspace_id = workspace_id
         self.item_id = item_id
-        self.run_id = run_id
         self.poll_interval = poll_interval
-        self.hook = MSFabricRunJobHook()
 
     def serialize(self):
-        return (
-            "fabric_with_logs_operator.FabricJobLogsTrigger",
-            {
-                "workspace_id": self.workspace_id,
-                "item_id": self.item_id,
-                "run_id": self.run_id,
-                "poll_interval": self.poll_interval,
-            },
-        )
+        return ("fabric_live_logs_operator.MSFabricNotebookTrigger", {
+            "workspace_id": self.workspace_id,
+            "item_id": self.item_id,
+            "poll_interval": self.poll_interval,
+        })
 
     async def run(self):
-        """
-        Async polling loop to get job status and live logs.
-        """
+        job_instance = await self.hook.run_item_async(self.workspace_id, self.item_id)
+        run_id = job_instance["id"]
+
         last_log_index = 0
-
-        while True:
-            # Fetch run status
-            run_status = self.hook.get_run_status(
-                workspace_id=self.workspace_id,
-                item_id=self.item_id,
-                run_id=self.run_id,
-            )
-            status = run_status.get("status", "Unknown")
-
-            # Fetch logs
-            try:
-                logs = self.hook.get_job_logs(
-                    workspace_id=self.workspace_id,
-                    item_id=self.item_id,
-                    run_id=self.run_id
-                )
-                if logs:
+        async with aiohttp.ClientSession() as session:
+            while True:
+                # Fetch logs incrementally
+                async with session.get(
+                    f"{self.hook.fabric_base_url}/v1/workspaces/{self.workspace_id}/items/{self.item_id}/jobs/{run_id}/getLog",
+                    headers=self.hook.get_auth_headers()
+                ) as resp:
+                    logs = (await resp.json()).get("value", [])
                     new_logs = logs[last_log_index:]
                     for line in new_logs:
                         yield TriggerEvent({"log": line})
                     last_log_index = len(logs)
-            except Exception as e:
-                yield TriggerEvent({"log": f"⚠️ Failed to fetch logs this poll: {e}"})
 
-            if status in ("Completed", "Failed", "Cancelled"):
-                yield TriggerEvent({"status": status})
-                return
+                # Check status
+                status_resp = await self.hook.get_run_status_async(self.workspace_id, self.item_id, run_id)
+                status = status_resp.get("status")
+                if status in ["Completed", "Failed", "Cancelled"]:
+                    yield TriggerEvent({"status": status})
+                    return
+                await asyncio.sleep(self.poll_interval)
 
-            await asyncio.sleep(self.poll_interval)
-
-# ------------------ Operator ------------------
+# --------------------- Operator ---------------------
 class MSFabricRunItemWithLiveLogsOperator(MSFabricRunItemOperator):
-    """
-    Deferrable Fabric operator that prints live notebook logs to Airflow logs.
-    """
-    @apply_defaults
-    def __init__(self, poll_interval: int = 10, **kwargs):
-        super().__init__(**kwargs)
-        self.poll_interval = poll_interval
-
     def execute(self, context: Context):
-        # Schedule notebook run
-        job_instance = super().execute(context)
-        if not job_instance:
-            raise AirflowException("Fabric did not return a job instance.")
+        if not getattr(self, "deferrable", False):
+            # fallback: blocking live logs
+            return super().execute(context)
 
-        run_id = job_instance.get("id")
-        if not run_id:
-            raise AirflowException("Could not extract run_id from Fabric response")
-
-        self.log.info(f"✅ Fabric job submitted. Run ID: {run_id}")
-
-        # Defer the task to async trigger
         self.defer(
-            trigger=FabricJobLogsTrigger(
-                workspace_id=self.workspace_id,
-                item_id=self.item_id,
-                run_id=run_id,
-                poll_interval=self.poll_interval,
-            ),
-            method_name="execute_complete",
+            timeout=datetime.timedelta(hours=1),
+            trigger=MSFabricNotebookTrigger(self.hook, self.workspace_id, self.item_id),
+            method_name="execute_complete"
         )
 
     def execute_complete(self, context: Context, event=None):
-        """
-        Handle logs/events from trigger.
-        """
-        if event is None:
-            raise AirflowException("No event received from Fabric trigger.")
-
+        if not event:
+            raise AirflowException("No event returned from trigger")
         if "log" in event:
             self.log.info(event["log"])
-
         if "status" in event:
-            status = event["status"]
-            if status != "Completed":
-                raise AirflowException(f"Fabric job failed with status: {status}")
-            self.log.info("✅ Fabric job completed successfully!")
+            if event["status"] == "Completed":
+                self.log.info("✅ Fabric job completed successfully!")
+            else:
+                raise AirflowException(f"❌ Fabric job failed with status: {event['status']}")
