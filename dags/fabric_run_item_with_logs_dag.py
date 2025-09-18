@@ -1,7 +1,7 @@
 from airflow import DAG
 from datetime import datetime
 from airflow.utils.dates import days_ago
-from fabric_with_live_logs_operator import MSFabricRunItemWithLiveLogsOperator
+from fabric_with_logs_operator import MSFabricRunItemWithLiveLogsOperator
 from airflow.providers.microsoft.fabric.hooks.run_item import MSFabricRunItemHook
 
 # Initialize the hook
