@@ -44,6 +44,8 @@ def run_initial_setup(**context):
     # Log session
     log_session_id = df_create_log_session_id()
 
+    spark = SparkSession.builder.appName("data_foundation").getOrCreate()
+    
     # Logger instance
     logger_instance = df_get_logger(
         name=enterprise_id,
@@ -110,12 +112,6 @@ with DAG(
         ),
     )
 
-    # Debug: check installed packages
-    list_installed_packages = BashOperator(
-        task_id="list_installed_packages",
-        bash_command="pip show data-foundation || pip list | grep foundation"
-    )
-
     # Debug: check sys.path and modules
     check_python_path = BashOperator(
         task_id="check_python_path",
@@ -134,4 +130,4 @@ with DAG(
     )
 
     # Task dependencies
-    install_shared_utils >> install_data_foundation >> list_installed_packages >> check_python_path >> initial_setup_task
+    install_shared_utils >> install_data_foundation >>  check_python_path >> initial_setup_task
